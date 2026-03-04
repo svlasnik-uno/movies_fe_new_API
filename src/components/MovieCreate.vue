@@ -58,14 +58,14 @@
                       <label>{{ isUpdate ? "Update Movie Image" : "Movie Image" }}</label>
                       <input type="file" @change="handleFileUpload" class="form-control" />
                       <!--<div v-if="!movieUpdated">-->
-                        <!-- movie image -->
-                        <div v-if="movie.movie_image" class="movie-image">
-                          <img :src="`${movie.movie_image}`" alt="Movie Picture" class="img-thumbnail" />
-                        </div>
-                        <div v-else class="movie-image">
-                          No Image
-                        </div>
-                    <!-- </div>-->
+                      <!-- movie image -->
+                      <div v-if="movieImagePreview" class="movie-image">
+                        <img :src="movieImagePreview" alt="Movie Picture" class="img-thumbnail" />
+                      </div>
+                      <div v-else class="movie-image">
+                        No Image
+                      </div>
+                      <!-- </div>-->
                     </div>
 
                     <div class="row justify-content-around">
@@ -76,7 +76,6 @@
                       <div type="button" class="btn btn-secondary col-4" @click="cancelOperation">Cancel</div>
                     </div>
                   </div>
-
                 </form>
               </div>
             </div>
@@ -117,11 +116,12 @@ export default {
       isUpdate: false,
       showMsg: '',
       authenticated: false,
+      movieImagePreview: null, // for displaying the selected or existing movie image as a thumbnail
+      // TMDb API configuration
       BASE_URL: "https://api.themoviedb.org/3",
       TMDB_API_KEY: "ba080278e548a56b768590a256a91a47",
       LANGUAGE: "en-US",
       IMAGE_URL: "https://image.tmdb.org/",
-      safeFileName: ""
     };
   },
   methods: {
@@ -131,6 +131,26 @@ export default {
       if (!file) return;
       this.movie.movie_image = file;   // store File for upload
       this.movieUpdated = true;        // signals upload on submit
+      this.setPreviewFromMovieImage(); // display thumbnail
+    },
+    // Set the movie image preview based on the current movie image, handling both File objects and URL strings
+    setPreviewFromMovieImage() {
+      const img = this.movie?.movie_image;
+      // If it's a File (upload or TMDB-downloaded file), create a blob URL
+      if (img instanceof File) {
+        this.movieImagePreview = URL.createObjectURL(img);
+      }
+      // If backend returns a string path/url
+      else if (typeof img === "string" && img.length) {
+        // If it's already absolute, use as-is. If it's relative, prefix API_URL.
+        this.movieImagePreview = img.startsWith("http")
+          ? img
+          : `${this.URL}${img}`; // e.g. API_URL + "/media/....jpg"
+      }
+      else {
+        this.movieImagePreview = null;
+        this.showMsg = "noImageError";
+      }
     },
     // Create a new movie, including handling image upload logic
     async createMovie() {
@@ -171,6 +191,7 @@ export default {
       formData.append("year", this.movie.year || "");
       formData.append("rating", this.movie.rating ?? "");
     },
+    // Cancel and return to movie list without saving
     cancelOperation() {
       router.push("/movie-list");
     },
@@ -208,9 +229,9 @@ export default {
           contentType === "image/png" ? "png" :
             contentType === "image/webp" ? "webp" :
               contentType === "image/jpeg" ? "jpg" : "img";
-        this.safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
-        console.log(`Downloaded image from ${url} as ${this.safeName} with content type ${contentType}`);
-        return new File([blob], this.safeName, { type: contentType });
+        const safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
+        console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
+        return new File([blob], safeName, { type: contentType });
       }
     },
     // Helper to make GET requests to TMDb API with proper query parameters and error handling
@@ -255,6 +276,8 @@ export default {
           const file = await this.urlToFile(posterUrl, `${this.movie.name}_poster`);
           if (file) {
             this.movie.movie_image = file;
+            this.movieUpdated = true;
+            this.setPreviewFromMovieImage(); // display thumbnail
           }
         } else {
           this.showMsg = "noImageError";
@@ -273,6 +296,7 @@ export default {
       this.isUpdate = true;
       apiService.getMovie(this.$route.params.pk).then(response => {
         this.movie = response.data;
+        this.setPreviewFromMovieImage(); // display existing image thumbnail
       }).catch(error => {
         if (error.response.status === 401) { // "not authorized"
           router.push("/auth");
