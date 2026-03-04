@@ -7,11 +7,14 @@
             <div class="alert alert-danger shadow" role="alert" v-if="showMsg === 'error'">
               Please verify Movie Information
             </div>
-            <div class="alert alert-danger shadow" role="alert" v-if="showMsg === 'requestError'">
+            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'requestError'">
               Please verify Movie Information - data formatted incorrectly
             </div>
-                        <div class="alert alert-danger shadow" role="alert" v-if="showMsg === 'searchError'">
+            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'searchError'">
               No results found for that movie title - please try again with a different title or check spelling
+            </div>
+            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'noImageError'">
+              No image found for that movie
             </div>
           </div>
         </div>
@@ -26,8 +29,9 @@
                       <label class="col-5">Name</label>
                       <div class="col col-7">
                         <input v-model="movie.name" type="text" class="form-control-sm form-control">
-                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="getMovieAPI">Get Movie
-                          Info</div>
+                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" 
+                        @click="getMovieAPI">Search for Movie
+                      </div>
                       </div>
                     </div>
                     <div class="form-group row justify-content-around py-2">
@@ -119,33 +123,15 @@ export default {
       IMAGE_URL: "https://image.tmdb.org/"
     };
   },
-  computed: {
-    // Compute the source for the movie image, handling both File objects (for preview) and URL strings
-    movieImageSrc() {
-      const img = this.movie?.movie_image;
-      if (!img) return "";
-      // If movie_image is a File (from <input type="file">), preview it
-      if (img instanceof File) {
-        return URL.createObjectURL(img);
-      }
-      // Otherwise it's assumed to be a URL string
-      return img;
-    },
-    // Check if the current movie image is a TMDb URL (used to determine if we need to download it on submit)
-    movieIsTmdbUrl() {
-      return typeof this.movie?.movie_image === "string" &&
-        this.movie.movie_image.startsWith(this.IMAGE_URL);
-    }
-  },
   methods: {
-  // Handle file selection from the input and store it for upload
+    // Handle file selection from the input and store it for upload
     handleFileUpload(event) {
       const file = event.target.files?.[0];
       if (!file) return;
       this.movie.movie_image = file;   // store File for upload
       this.movieUpdated = true;        // signals upload on submit
     },
-// Create a new movie, including handling image upload logic
+    // Create a new movie, including handling image upload logic
     async createMovie() {
       try {
         const formData = new FormData();
@@ -174,7 +160,6 @@ export default {
       // - Else if movie_image is a TMDb URL string: download and send as file
       // - Else if movie_image is some other URL (e.g., already on your server): usually do nothing on update
       const img = this.movie.movie_image;
-
       const isFile = img instanceof File;
       const isStringUrl = typeof img === "string" && img.startsWith("http");
       const isTmdbUrl = typeof img === "string" && img.startsWith(this.IMAGE_URL);
@@ -186,16 +171,12 @@ export default {
         }
       } else if (isTmdbUrl) {
         // TMDb poster URL -> download then upload as file
-        const file = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_tmdb`);
-        formData.append("movie_image", file);
-
-        // Optional: treat as "updated" so UI message is consistent
-        this.movieUpdated = true;
+        const img = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_tmdb`);
+        formData.append("movie_image", img);
       } else if (!this.isUpdate && isStringUrl) {
         // Creating new movie and you somehow have a non-TMDb URL:
-        const file = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_url`);
-        formData.append("movie_image", file);
-        this.movieUpdated = true;
+        const img = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_url`);
+        formData.append("movie_image", img);
       }
       formData.append("name", this.movie.name || "");
       formData.append("description", this.movie.description || "");
@@ -205,24 +186,28 @@ export default {
     // Utility to download an image from a URL and convert it to a File object for upload
     async urlToFile(url, filename = "poster.jpg") {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
-      const blob = await res.blob();
-      // Try to preserve real content type
-      const contentType = blob.type || "image/jpeg";
-      const ext =
-        contentType === "image/png" ? "png" :
-          contentType === "image/webp" ? "webp" :
-            contentType === "image/jpeg" ? "jpg" : "img";
-      const safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
-      this.movie.movie_image = safeName; // Optional: store name for UI display
-      console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
-
-      return new File([blob], safeName, { type: contentType });
+      if (!res.ok) {
+        this.showMsg = "searchError";
+        this.movie = {};
+        return null;
+      }
+      else {
+        const blob = await res.blob();
+        // Try to preserve real content type
+        const contentType = blob.type || "image/jpeg";
+        const ext =
+          contentType === "image/png" ? "png" :
+            contentType === "image/webp" ? "webp" :
+              contentType === "image/jpeg" ? "jpg" : "img";
+        const safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
+        //console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
+        return new File([blob], safeName, { type: contentType });
+      }
     },
     cancelOperation() {
       router.push("/movie-list");
     },
-// Update movie details, including handling image changes
+    // Update movie details, including handling image changes
     async updateMovie() {
       try {
         const formData = new FormData();
@@ -247,14 +232,16 @@ export default {
       const url = new URL(`${this.BASE_URL}${path}`);
       url.searchParams.set("api_key", this.TMDB_API_KEY);
       url.searchParams.set("language", this.LANGUAGE);
+      url.searchParams.set("include_adult", "false");
 
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
       }
       const res = await fetch(url);
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`TMDb request failed (${res.status}): ${text || res.statusText}`);
+        this.showMsg = "searchError";
+        this.movie = {};
+        //console.error(`TMDb request failed (${res.status}): ${text || res.statusText}`);
       }
       return res.json();
     },
@@ -264,7 +251,8 @@ export default {
       const titleInput = this.movie.name;
       // Search for the movie by title
       const searchResults = await this.tmdbGet("/search/movie", { query: titleInput });
-
+      // more than 1 movie could be returned - use the first one (most relevant) to populate the form
+      // including downloading the poster image if available
       if (searchResults.total_results > 0 && Array.isArray(searchResults.results) && searchResults.results.length > 0) {
         const result = searchResults.results[0];
         const movieCredits = await this.tmdbGet(`/movie/${result.id}/credits`); // for director info if needed
@@ -274,22 +262,24 @@ export default {
         this.movie.rating = parseInt(result.vote_average);
         this.movie.year = result.release_date.slice(0, 4)
 
-        const posterUrl = result.poster_path ? `${this.IMAGE_URL}/t/p/w500${result.poster_path}`          : "";
+        const posterUrl = result.poster_path ? `${this.IMAGE_URL}/t/p/w500${result.poster_path}` : "";
         if (posterUrl) {
           // Download and store as File so your backend receives a real file
           const file = await this.urlToFile(posterUrl, `${this.movie.name}_poster`);
           this.movie.movie_image = file;
           this.movieUpdated = true;
         } else {
-          console.log(`No results found for '${titleInput}'.`);
+          this.showMsg = noImageError;
+          //console.log(`No results found for '${titleInput}'.`);
         }
       }
-      else{
+      else {
         this.showMsg = "searchError";
+        this.movie = {};
       }
     }
   },
-// On component mount, check if we're editing an existing movie (based on route params) and fetch its details if so  
+  // On component mount, check if we're editing an existing movie (based on route params) and fetch its details if so  
   mounted() {
     if (this.$route.params.pk) {
       this.pageTitle = "Edit Movie";
