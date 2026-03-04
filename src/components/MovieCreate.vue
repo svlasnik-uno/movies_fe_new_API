@@ -29,9 +29,9 @@
                       <label class="col-5">Name</label>
                       <div class="col col-7">
                         <input v-model="movie.name" type="text" class="form-control-sm form-control">
-                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" 
-                        @click="getMovieAPI">Search for Movie
-                      </div>
+                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="getMovieAPI">Search
+                          for Movie
+                        </div>
                       </div>
                     </div>
                     <div class="form-group row justify-content-around py-2">
@@ -57,26 +57,26 @@
                     <div class="form-group">
                       <label>{{ isUpdate ? "Update Movie Image" : "Movie Image" }}</label>
                       <input type="file" @change="handleFileUpload" class="form-control" />
-                      <div v-if="isUpdate">
-                        <div v-if="!movieUpdated">
-                          <!-- movie image -->
-                          <div v-if="movie.movie_image" class="movie-image">
-                            <img :src="`${movie.movie_image}`" alt="Movie Picture" class="img-thumbnail" />
-                          </div>
-                          <div v-else class="movie-image">
-                            No Image
-                          </div>
+                      <!--<div v-if="!movieUpdated">-->
+                        <!-- movie image -->
+                        <div v-if="movie.movie_image" class="movie-image">
+                          <img :src="`${movie.movie_image}`" alt="Movie Picture" class="img-thumbnail" />
                         </div>
+                        <div v-else class="movie-image">
+                          No Image
+                        </div>
+                    <!-- </div>-->
+                    </div>
+
+                    <div class="row justify-content-around">
+                      <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="createMovie">Save
                       </div>
-                      <div class="row justify-content-around">
-                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="createMovie">Save
-                        </div>
-                        <div v-if="isUpdate" type="button" class="btn btn-primary col-4" @click="updateMovie">Update
-                        </div>
-                        <div type="button" class="btn btn-secondary col-4" @click="cancelOperation">Cancel</div>
+                      <div v-if="isUpdate" type="button" class="btn btn-primary col-4" @click="updateMovie">Update
                       </div>
+                      <div type="button" class="btn btn-secondary col-4" @click="cancelOperation">Cancel</div>
                     </div>
                   </div>
+
                 </form>
               </div>
             </div>
@@ -120,7 +120,8 @@ export default {
       BASE_URL: "https://api.themoviedb.org/3",
       TMDB_API_KEY: "ba080278e548a56b768590a256a91a47",
       LANGUAGE: "en-US",
-      IMAGE_URL: "https://image.tmdb.org/"
+      IMAGE_URL: "https://image.tmdb.org/",
+      safeFileName: ""
     };
   },
   methods: {
@@ -157,52 +158,18 @@ export default {
         formData.append("pk", this.movie.pk);
       }
       // - If user selected a file: send it (movieUpdated === true)
-      // - Else if movie_image is a TMDb URL string: download and send as file
-      // - Else if movie_image is some other URL (e.g., already on your server): usually do nothing on update
       const img = this.movie.movie_image;
       const isFile = img instanceof File;
-      const isStringUrl = typeof img === "string" && img.startsWith("http");
-      const isTmdbUrl = typeof img === "string" && img.startsWith(this.IMAGE_URL);
-
       if (isFile) {
         // upload selected file
         if (!this.isUpdate || this.movieUpdated) {
           formData.append("movie_image", img);
         }
-      } else if (isTmdbUrl) {
-        // TMDb poster URL -> download then upload as file
-        const img = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_tmdb`);
-        formData.append("movie_image", img);
-      } else if (!this.isUpdate && isStringUrl) {
-        // Creating new movie and you somehow have a non-TMDb URL:
-        const img = await this.urlToFile(img, `${(this.movie.name || "poster").replace(/\s+/g, "_")}_url`);
-        formData.append("movie_image", img);
       }
       formData.append("name", this.movie.name || "");
       formData.append("description", this.movie.description || "");
       formData.append("year", this.movie.year || "");
       formData.append("rating", this.movie.rating ?? "");
-    },
-    // Utility to download an image from a URL and convert it to a File object for upload
-    async urlToFile(url, filename = "poster.jpg") {
-      const res = await fetch(url);
-      if (!res.ok) {
-        this.showMsg = "searchError";
-        this.movie = {};
-        return null;
-      }
-      else {
-        const blob = await res.blob();
-        // Try to preserve real content type
-        const contentType = blob.type || "image/jpeg";
-        const ext =
-          contentType === "image/png" ? "png" :
-            contentType === "image/webp" ? "webp" :
-              contentType === "image/jpeg" ? "jpg" : "img";
-        const safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
-        //console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
-        return new File([blob], safeName, { type: contentType });
-      }
     },
     cancelOperation() {
       router.push("/movie-list");
@@ -224,6 +191,26 @@ export default {
         if (error?.response?.status === 401) router.push("/auth");
         else if (error?.response?.status === 400) this.showMsg = "requestError";
         else this.showMsg = "error";
+      }
+    },
+    // Utility to download an image from a URL and convert it to a File object for upload
+    async urlToFile(url, filename = "poster.jpg") {
+      const res = await fetch(url);
+      if (!res.ok) {
+        this.showMsg = "noImageError";
+        return null;
+      }
+      else {
+        const blob = await res.blob();
+        // Try to preserve real content type
+        const contentType = blob.type || "image/jpeg";
+        const ext =
+          contentType === "image/png" ? "png" :
+            contentType === "image/webp" ? "webp" :
+              contentType === "image/jpeg" ? "jpg" : "img";
+        this.safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
+        console.log(`Downloaded image from ${url} as ${this.safeName} with content type ${contentType}`);
+        return new File([blob], this.safeName, { type: contentType });
       }
     },
     // Helper to make GET requests to TMDb API with proper query parameters and error handling
@@ -261,16 +248,16 @@ export default {
         this.movie.description = result.overview;
         this.movie.rating = parseInt(result.vote_average);
         this.movie.year = result.release_date.slice(0, 4)
-
+        this.movieUpdated = true;
         const posterUrl = result.poster_path ? `${this.IMAGE_URL}/t/p/w500${result.poster_path}` : "";
         if (posterUrl) {
           // Download and store as File so your backend receives a real file
           const file = await this.urlToFile(posterUrl, `${this.movie.name}_poster`);
-          this.movie.movie_image = file;
-          this.movieUpdated = true;
+          if (file) {
+            this.movie.movie_image = file;
+          }
         } else {
-          this.showMsg = noImageError;
-          //console.log(`No results found for '${titleInput}'.`);
+          this.showMsg = "noImageError";
         }
       }
       else {
