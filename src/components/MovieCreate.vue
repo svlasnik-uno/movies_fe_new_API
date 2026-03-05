@@ -29,15 +29,6 @@
                       <label class="col-5">Name</label>
                       <div class="col col-7">
                         <input v-model="movie.name" type="text" class="form-control-sm form-control">
-                        <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="getMovieAPI">Search
-                          for Movie
-                        </div>
-                      </div>
-                    </div>
-                    <div class="form-group row justify-content-around py-2">
-                      <label class="col-5">Description</label>
-                      <div class="col col-7">
-                        <input v-model="movie.description" type="text" class="form-control-sm form-control">
                       </div>
                     </div>
                     <div class="form-group row justify-content-around py-2">
@@ -46,13 +37,27 @@
                         <input v-model="movie.year" type="text" class="form-control-sm form-control">
                       </div>
                     </div>
+                    <div v-if="!isUpdate" type="button" class="btn btn-primary col-4" @click="getMovieAPI">Search
+                      for Movie
+                    </div>
+                    <div class="form-group row justify-content-around py-2">
+                      <label class="col-5">Description</label>
+                      <div class="col col-7">
+                        <input v-model="movie.description" type="text" class="form-control-sm form-control">
+                      </div>
+                    </div>
                     <div class="form-group row justify-content-around py-2">
                       <label class="col-5">Rating</label>
                       <div class="col col-7">
                         <input v-model="movie.rating" type="text" class="form-control-sm form-control">
                       </div>
                     </div>
-
+                    <div class="form-group row justify-content-around py-2">
+                      <label class="col-5">Director</label>
+                      <div class="col col-7">
+                        <input v-model="movie.director" type="text" class="form-control-sm form-control">
+                      </div>
+                    </div>
                     <!-- Movie image -->
                     <div class="form-group">
                       <label>{{ isUpdate ? "Update Movie Image" : "Movie Image" }}</label>
@@ -118,9 +123,6 @@ export default {
       authenticated: false,
       movieImagePreview: null, // for displaying the selected or existing movie image as a thumbnail
       // TMDb API configuration
-      BASE_URL: "https://api.themoviedb.org/3",
-      TMDB_API_KEY: "ba080278e548a56b768590a256a91a47",
-      LANGUAGE: "en-US",
       IMAGE_URL: "https://image.tmdb.org//t/p/w500",
     };
   },
@@ -190,6 +192,7 @@ export default {
       formData.append("description", this.movie.description || "");
       formData.append("year", this.movie.year || "");
       formData.append("rating", this.movie.rating ?? "");
+      formData.append("director", this.movie.director ?? "");
     },
     // Cancel and return to movie list without saving
     cancelOperation() {
@@ -230,21 +233,30 @@ export default {
             contentType === "image/webp" ? "webp" :
               contentType === "image/jpeg" ? "jpg" : "img";
         const safeName = filename.includes(".") ? filename : `${filename}.${ext}`;
-        console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
+        //console.log(`Downloaded image from ${url} as ${safeName} with content type ${contentType}`);
         return new File([blob], safeName, { type: contentType });
       }
     },
     // Fetch movie details from an API based on the movie name input by the user
     async getMovieAPI() {
       // Use the movie name as the search query to fetch details from TMDb
-      const titleInput = this.movie.name;
-      // Search for the movie by title
-      const searchResults = await apiService.movieAPIGet("/search/movie", { query: titleInput });
+      const movieTitle = this.movie.name; // start with just the name for search
+      // Search for the movie by title and year if available
+      let searchResults = "";
+      if (this.movie.year) {
+        searchResults = await apiService.movieAPIGet("/search/movie", { query: movieTitle, year: this.movie.year });
+      }
+      else {
+         searchResults = await apiService.movieAPIGet("/search/movie", { query: movieTitle });
+      }
       // more than 1 movie could be returned - use the first one (most relevant) to populate the form
       // including downloading the poster image if available
       if (searchResults.total_results > 0 && Array.isArray(searchResults.results) && searchResults.results.length > 0) {
         const result = searchResults.results[0];
+
+        // get director
         const movieCredits = await apiService.movieAPIGet(`/movie/${result.id}/credits`); // for director info if needed
+        this.movie.director = movieCredits.crew.find(person => person.job === "Director")?.name || "N/A";
 
         this.movie.name = result.title
         this.movie.description = result.overview;
