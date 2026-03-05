@@ -14,7 +14,7 @@
               No results found for that movie title - please try again with a different title or check spelling
             </div>
             <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'noImageError'">
-              No image found for that movie
+              No image found for movie
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default {
       BASE_URL: "https://api.themoviedb.org/3",
       TMDB_API_KEY: "ba080278e548a56b768590a256a91a47",
       LANGUAGE: "en-US",
-      IMAGE_URL: "https://image.tmdb.org/",
+      IMAGE_URL: "https://image.tmdb.org//t/p/w500",
     };
   },
   methods: {
@@ -234,43 +234,24 @@ export default {
         return new File([blob], safeName, { type: contentType });
       }
     },
-    // Helper to make GET requests to TMDb API with proper query parameters and error handling
-    async tmdbGet(path, params = {}) {
-      // Build the URL with query parameters
-      const url = new URL(`${this.BASE_URL}${path}`);
-      url.searchParams.set("api_key", this.TMDB_API_KEY);
-      url.searchParams.set("language", this.LANGUAGE);
-      url.searchParams.set("include_adult", "false");
-
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-      }
-      const res = await fetch(url);
-      if (!res.ok) {
-        this.showMsg = "searchError";
-        this.movie = {};
-        //console.error(`TMDb request failed (${res.status}): ${text || res.statusText}`);
-      }
-      return res.json();
-    },
-    // Fetch movie details from TMDb based on the movie name input by the user
+    // Fetch movie details from an API based on the movie name input by the user
     async getMovieAPI() {
       // Use the movie name as the search query to fetch details from TMDb
       const titleInput = this.movie.name;
       // Search for the movie by title
-      const searchResults = await this.tmdbGet("/search/movie", { query: titleInput });
+      const searchResults = await apiService.movieAPIGet("/search/movie", { query: titleInput });
       // more than 1 movie could be returned - use the first one (most relevant) to populate the form
       // including downloading the poster image if available
       if (searchResults.total_results > 0 && Array.isArray(searchResults.results) && searchResults.results.length > 0) {
         const result = searchResults.results[0];
-        const movieCredits = await this.tmdbGet(`/movie/${result.id}/credits`); // for director info if needed
+        const movieCredits = await apiService.movieAPIGet(`/movie/${result.id}/credits`); // for director info if needed
 
         this.movie.name = result.title
         this.movie.description = result.overview;
         this.movie.rating = parseInt(result.vote_average);
         this.movie.year = result.release_date.slice(0, 4)
         this.movieUpdated = true;
-        const posterUrl = result.poster_path ? `${this.IMAGE_URL}/t/p/w500${result.poster_path}` : "";
+        const posterUrl = result.poster_path ? `${this.IMAGE_URL}${result.poster_path}` : "";
         if (posterUrl) {
           // Download and store as File so your backend receives a real file
           const file = await this.urlToFile(posterUrl, `${this.movie.name}_poster`);
