@@ -88,7 +88,12 @@
                     </thead>
                     <tbody>
                         <tr v-for="movie in pagedMovies" :key="movie.pk">
-                            <th scope="row">{{ movie.name }}</th>
+
+                            <th scope="row">
+                                <router-link :to="`/moviedetail/${movie.pk}`">
+                                    {{ movie.name }}
+                                </router-link>
+                            </th>
                             <td>{{ movie.description }}</td>
                             <td>
                                 <div v-if="movie.movie_image" class="movie-image">

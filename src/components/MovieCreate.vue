@@ -115,6 +115,7 @@ export default {
     return {
       showError: false,
       movie: {},
+      movieCredits: [], // for storing movie credits info from API (e.g. director)
       URL: API_URL,
       movieUpdated: false,
       pageTitle: "Add New Movie",
@@ -156,8 +157,13 @@ export default {
     },
     // Create a new movie, including handling image upload logic
     async createMovie() {
+      this.isUpdate = false;
       try {
         const formData = new FormData();
+        // if no contributors set to empty list
+        if(!this.movie.contributors || this.movie.contributors.length === 0) {
+          this.movie.contributors = [];
+        }
         await this.buildFormData(formData);
 
         const response = await apiService.addNewMovie(formData);
@@ -193,6 +199,7 @@ export default {
       formData.append("year", this.movie.year || "");
       formData.append("rating", this.movie.rating ?? "");
       formData.append("director", this.movie.director ?? "");
+      formData.append("contributors", JSON.stringify(this.movie.contributors));
     },
     // Cancel and return to movie list without saving
     cancelOperation() {
@@ -247,7 +254,7 @@ export default {
         searchResults = await apiService.movieAPIGet("/search/movie", { query: movieTitle, year: this.movie.year });
       }
       else {
-         searchResults = await apiService.movieAPIGet("/search/movie", { query: movieTitle });
+        searchResults = await apiService.movieAPIGet("/search/movie", { query: movieTitle });
       }
       // more than 1 movie could be returned - use the first one (most relevant) to populate the form
       // including downloading the poster image if available
@@ -255,9 +262,15 @@ export default {
         const result = searchResults.results[0];
 
         // get director
-        const movieCredits = await apiService.movieAPIGet(`/movie/${result.id}/credits`); // for director info if needed
-        this.movie.director = movieCredits.crew.find(person => person.job === "Director")?.name || "N/A";
+        this.movieCredits = await apiService.movieAPIGet(`/movie/${result.id}/credits`); // for director info if needed
+        this.movie.director = this.movieCredits.crew.find(person => person.job === "Director")?.name || "N/A";
 
+        this.movie.contributors = this.movieCredits.cast.slice(0, 10)
+          .map(person => ({
+            firstname: person.name.split(" ")[0],
+            lastname: person.name.split(" ").slice(1).join(" "),
+            role: person.known_for_department
+          }));
         this.movie.name = result.title
         this.movie.description = result.overview;
         this.movie.rating = parseInt(result.vote_average);
@@ -272,6 +285,7 @@ export default {
             this.movieUpdated = true;
             this.setPreviewFromMovieImage(); // display thumbnail
           }
+
         } else {
           this.showMsg = "noImageError";
         }

@@ -43,6 +43,7 @@ export class APIService {
     const headers = { Authorization: `JWT ${jwtToken}` };
     return axios.delete(url, { headers: headers });
   }
+
   // authenticate user login with backend
   authenticateLogin(credentials) {
     const url = `${API_URL}/api/`;
