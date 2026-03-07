@@ -88,7 +88,7 @@
                     </div>
                     <div class="text-center mt-3">
                         <button type="button" class="btn btn-secondary" @click="backOperation">
-                            Back to Movies
+                            Back
                         </button>
                     </div>
                 </div>
@@ -136,7 +136,7 @@ export default {
   },
     methods: {
         backOperation() {
-            router.push("/movie-list");
+            this.$router.back();
         },
         updateMovie(movie) {
             router.push("/movie-create/" + movie.pk);

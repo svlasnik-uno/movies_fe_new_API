@@ -16,6 +16,9 @@
             <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'noImageError'">
               No image found for movie
             </div>
+            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'uniqueError'">
+              A movie with that name and year already exists - please change the name or year
+            </div>
           </div>
         </div>
         <div class="row align-items-center justify-content-center">
@@ -57,6 +60,78 @@
                       <div class="col col-7">
                         <input v-model="movie.director" type="text" class="form-control-sm form-control">
                       </div>
+                    </div>
+                    <!-- Contributors -->
+                    <div class="form-group mt-3">
+                      <label class="fw-bold">Contributors ({{ (movie.contributors?.length || 0) }}/10)</label>
+
+                      <!-- Add/Edit one contributor at a time -->
+                      <div class="card p-2 mb-2">
+                        <div class="row g-2">
+                          <div class="col-12 col-md-4">
+                            <input v-model.trim="contributorDraft.firstname" type="text"
+                              class="form-control form-control-sm" placeholder="First name" />
+                          </div>
+
+                          <div class="col-12 col-md-4">
+                            <input v-model.trim="contributorDraft.lastname" type="text"
+                              class="form-control form-control-sm" placeholder="Last name" />
+                          </div>
+
+                          <div class="col-12 col-md-4">
+                            <input v-model.trim="contributorDraft.role" type="text" class="form-control form-control-sm"
+                              placeholder="Role (e.g., Actor, Producer)" />
+                          </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-2">
+                          <button type="button" class="btn btn-sm btn-primary" @click="upsertContributor"
+                            :disabled="!canUpsertContributor">
+                            {{ editingContributorIndex === null ? "Add contributor" : "Update contributor" }}
+                          </button>
+
+                          <button v-if="editingContributorIndex !== null" type="button" class="btn btn-sm btn-secondary"
+                            @click="cancelContributorEdit">
+                            Cancel
+                          </button>
+
+                          <div class="ms-auto small text-muted align-self-center">
+                            Add one at a time (max 10)
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Contributors table -->
+                      <div v-if="movie.contributors && movie.contributors.length" class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                          <thead>
+                            <tr>
+                              <th style="width: 40%;">Name</th>
+                              <th style="width: 45%;">Role</th>
+                              <th style="width: 15%;">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="(c, idx) in movie.contributors"
+                              :key="`${c.firstname}-${c.lastname}-${c.role}-${idx}`">
+                              <td>{{ c.firstname }} {{ c.lastname }}</td>
+                              <td>{{ c.role }}</td>
+                              <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                  @click="startContributorEdit(idx)" title="Edit">
+                                  <font-awesome-icon icon="fa-solid fa-pencil" />
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                  @click="deleteContributor(idx)" title="Delete">
+                                  <font-awesome-icon icon="fa-solid fa-trash-can" />
+                                </button>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div v-else class="small text-muted">No contributors yet.</div>
                     </div>
                     <!-- Movie image -->
                     <div class="form-group">
@@ -125,6 +200,9 @@ export default {
       movieImagePreview: null, // for displaying the selected or existing movie image as a thumbnail
       // TMDb API configuration
       IMAGE_URL: "https://image.tmdb.org//t/p/w500",
+      contributorDraft: { firstname: "", lastname: "", role: "" },
+      editingContributorIndex: null,
+      MAX_CONTRIBUTORS: 10,
     };
   },
   methods: {
@@ -155,31 +233,7 @@ export default {
         this.showMsg = "noImageError";
       }
     },
-    // Create a new movie, including handling image upload logic
-    async createMovie() {
-      this.isUpdate = false;
-      try {
-        const formData = new FormData();
-        // if no contributors set to empty list
-        if(!this.movie.contributors || this.movie.contributors.length === 0) {
-          this.movie.contributors = [];
-        }
-        await this.buildFormData(formData);
 
-        const response = await apiService.addNewMovie(formData);
-        if (response.status === 201) {
-          this.movie = response.data;
-          this.showMsg = "";
-          router.push("/movie-list/new");
-        } else {
-          this.showMsg = "error";
-        }
-      } catch (error) {
-        if (error?.response?.status === 401) router.push("/auth");
-        else if (error?.response?.status === 400) this.showMsg = "requestError";
-        else this.showMsg = "error";
-      }
-    },
     // Build FormData for both create and update operations, handling movie details and image logic
     async buildFormData(formData) {
       if (this.isUpdate) {
@@ -199,11 +253,42 @@ export default {
       formData.append("year", this.movie.year || "");
       formData.append("rating", this.movie.rating ?? "");
       formData.append("director", this.movie.director ?? "");
-      formData.append("contributors", JSON.stringify(this.movie.contributors));
+      formData.append("contributors", JSON.stringify(this.movie.contributors || []));
     },
     // Cancel and return to movie list without saving
     cancelOperation() {
-      router.push("/movie-list");
+      this.$router.back();
+    },
+    // Create a new movie, including handling image upload logic
+    async createMovie() {
+      this.isUpdate = false;
+      try {
+        const formData = new FormData();
+        // if no contributors set to empty list
+        if (!this.movie.contributors || this.movie.contributors.length === 0) {
+          this.movie.contributors = [];
+        }
+        await this.buildFormData(formData);
+
+        const response = await apiService.addNewMovie(formData);
+        if (response.status === 201) {
+          this.movie = response.data;
+          this.showMsg = "";
+          this.$router.push("/movie-list/new");
+        } else {
+          this.showMsg = "error";
+        }
+      } catch (error) {
+
+        if (error?.response?.status === 401) router.push("/auth");
+        else if (error?.response?.status === 400) {
+          const nonField = error.response.data.non_field_errors?.[0];
+          if (nonField?.includes("must make a unique set")) {
+            this.showMsg = "uniqueError";
+          }
+          else this.showMsg = "error";
+        }
+      }
     },
     // Update movie details, including handling image changes
     async updateMovie() {
@@ -214,13 +299,19 @@ export default {
         const response = await apiService.updateMovie(formData);
         if (response.status === 200) {
           this.movie = response.data;
-          router.push("/movie-list/update");
+          this.$router.push("/movie-list/update");
         } else {
           this.showMsg = "error";
         }
       } catch (error) {
         if (error?.response?.status === 401) router.push("/auth");
-        else if (error?.response?.status === 400) this.showMsg = "requestError";
+        else if (error?.response?.status === 400) {
+          const nonField = error.response.data.non_field_errors?.[0];
+          if (nonField?.includes("must make a unique set")) {
+            this.showMsg = "uniqueError";
+          }
+          else this.showMsg = "error";
+        }
         else this.showMsg = "error";
       }
     },
@@ -294,6 +385,82 @@ export default {
         this.showMsg = "searchError";
         this.movie = {};
       }
+    },
+    normalizeContributor(c) {
+      return {
+        firstname: (c.firstname || "").trim(),
+        lastname: (c.lastname || "").trim(),
+        role: (c.role || "").trim(),
+      };
+    },
+    resetContributorDraft() {
+      this.contributorDraft.firstname = "";
+      this.contributorDraft.lastname = "";
+      this.contributorDraft.role = "";
+    },
+    upsertContributor() {
+      // Ensure array exists
+      if (!this.movie.contributors) this.movie.contributors = [];
+
+      const next = this.normalizeContributor(this.contributorDraft);
+      const hasAllFields = next.firstname && next.lastname && next.role;
+
+      const underLimit =
+        this.editingContributorIndex !== null ||
+        this.movie.contributors.length < this.MAX_CONTRIBUTORS;
+
+      if (!hasAllFields || !underLimit) return;
+
+      if (this.editingContributorIndex === null) {
+        // Add new (one at a time)
+        this.movie.contributors.push(next);
+      } else {
+        // Update existing
+        this.movie.contributors.splice(this.editingContributorIndex, 1, next);
+      }
+
+      this.editingContributorIndex = null;
+      this.resetContributorDraft();
+    },
+    startContributorEdit(index) {
+      const c = this.movie.contributors[index];
+      this.contributorDraft.firstname = c.firstname;
+      this.contributorDraft.lastname = c.lastname;
+      this.contributorDraft.role = c.role;
+      this.editingContributorIndex = index;
+    },
+    cancelContributorEdit() {
+      this.editingContributorIndex = null;
+      this.resetContributorDraft();
+    },
+    deleteContributor(index) {
+      this.movie.contributors.splice(index, 1);
+
+      // If deleting the item being edited, reset the editor.
+      if (this.editingContributorIndex === index) {
+        this.cancelContributorEdit();
+      } else if (this.editingContributorIndex !== null && this.editingContributorIndex > index) {
+        // Keep editing the same logical item after indices shift
+        this.editingContributorIndex -= 1;
+      }
+    },
+  },
+  computed: {
+    canUpsertContributor() {
+      const next = {
+        firstname: (this.contributorDraft.firstname || "").trim(),
+        lastname: (this.contributorDraft.lastname || "").trim(),
+        role: (this.contributorDraft.role || "").trim(),
+      };
+
+      const hasAllFields = next.firstname && next.lastname && next.role;
+      const list = this.movie.contributors || [];
+
+      // Allow update even when list is already at max
+      const underLimit =
+        this.editingContributorIndex !== null || list.length < this.MAX_CONTRIBUTORS;
+
+      return Boolean(hasAllFields && underLimit);
     }
   },
   // On component mount, check if we're editing an existing movie (based on route params) and fetch its details if so  
