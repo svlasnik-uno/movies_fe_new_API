@@ -262,14 +262,15 @@ export default {
     // Create a new movie, including handling image upload logic
     async createMovie() {
       this.isUpdate = false;
+
       try {
         const formData = new FormData();
+
         // if no contributors set to empty list
         if (!this.movie.contributors || this.movie.contributors.length === 0) {
           this.movie.contributors = [];
         }
         await this.buildFormData(formData);
-
         const response = await apiService.addNewMovie(formData);
         if (response.status === 201) {
           this.movie = response.data;
@@ -369,8 +370,11 @@ export default {
         this.movieUpdated = true;
         const posterUrl = result.poster_path ? `${this.IMAGE_URL}${result.poster_path}` : "";
         if (posterUrl) {
-          // Download and store as File so your backend receives a real file
-          const file = await this.urlToFile(posterUrl, `${this.movie.name}_poster`);
+          // Download and store as File so your backend receives a real file upload, 
+          // allowing you to reuse the same image handling logic for both TMDb-imported and user-uploaded images
+          // remove any special characters from filename to avoid issues with file handling on backend
+          const filename = `${this.movie.name}_poster`.trim().replace(/[^a-zA-Z0-9_]/g, '');
+          const file = await this.urlToFile(posterUrl, `${filename}_poster`);
           if (file) {
             this.movie.movie_image = file;
             this.movieUpdated = true;

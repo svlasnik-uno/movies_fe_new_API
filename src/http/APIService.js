@@ -1,7 +1,7 @@
 import axios from "axios";
 // Change the API_URL to the correct location of the backend API before deploying the app
 export const API_URL =
-  "http://localhost:8000"; /*'https://vlasnikuno.pythonanywhere.com'; 'http://localhost:8000' http://127.0.0.1:8000 or  'https://yourPythonAnywhereName.pythonanywhere.com'*/
+  'https://vlasnikuno.pythonanywhere.com'; /*'https://vlasnikuno.pythonanywhere.com'; 'http://localhost:8000' http://127.0.0.1:8000 or  'https://yourPythonAnywhereName.pythonanywhere.com'*/
 export const BASE_API_URL = "https://api.themoviedb.org/3";
 export const TMDB_API_KEY = "ba080278e548a56b768590a256a91a47";
 export const LANGUAGE = "en-US";
