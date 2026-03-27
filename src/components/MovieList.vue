@@ -25,8 +25,8 @@
         </div>
         <!--Mobile device view-->
         <div class="d-md-none" id="collapsable-card" style="width: 80%">
-            <button v-if="this.authenticated === 'true'" type="button" class="btn btn-primary" @click="addNewMovie">
-                <font-awesome-icon icon="plus" />
+            <button v-if="authenticated" type="button" class="btn btn-primary" @click="addNewMovie">
+                <i class="bi bi-plus"></i>
             </button>
             <div class="card" v-for="movie in pagedMovies" :key="movie.pk">
                 <div class="card-header" :id="'heading' + movie.name">
@@ -53,12 +53,12 @@
                         <p><b>Year:</b> {{ movie.year }}</p>
                         <p><b>Rating:</b> {{ movie.rating }}</p>
                         <p><b>Director:</b> {{ movie.director }}</p>
-                        <div v-if="this.authenticated === 'true'" class="btn-group">
+                        <div v-if="authenticated" class="btn-group">
                             <button @click="updateMovie(movie)" style="background-color: transparent; padding: 5;">
-                                <font-awesome-icon icon="pencil" />
+                                <i class="bi bi-pencil"></i>
                             </button>
                             <button @click="deleteMovie(movie)" style="background-color: transparent; padding: 5;">
-                                <font-awesome-icon icon="trash" />
+                                <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
@@ -68,7 +68,7 @@
         <!--non-Mobile device view-->
         <!-- Data table - only allow update/delete when authenticated user -->
         <!-- Only allow add of movie when authenticated user -->
-        <div v-if="this.authenticated === 'true'">
+        <div v-if="authenticated">
             <button type="button" class="btn btn-primary" @click="addNewMovie">Add New Movie</button>
         </div>
         <div class="row align-items-center justify-content-center">
@@ -82,8 +82,8 @@
                             <th scope="col">Year</th>
                             <th scope="col">Rating</th>
                             <th scope="col">Director</th>
-                            <th v-if="this.authenticated === 'true'" scope="col">Update</th>
-                            <th v-if="this.authenticated === 'true'" scope="col">Delete</th>
+                            <th v-if="authenticated" scope="col">Update</th>
+                            <th v-if="authenticated" scope="col">Delete</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -109,20 +109,19 @@
                             <td>{{ movie.rating }}</td>
                             <td>{{ movie.director }}</td>
 
-                            <td v-if="this.authenticated === 'true'" @click="updateMovie(movie)">
+                            <td v-if="authenticated" @click="updateMovie(movie)">
                                 <button style="background-color: transparent; padding: 0;">
-                                    <font-awesome-icon icon="pencil" />
+                                    <i class="bi bi-pencil"></i>
                                 </button>
                             </td>
-                            <td v-if="this.authenticated === 'true'" @click="deleteMovie(movie)">
+                            <td v-if="authenticated" @click="deleteMovie(movie)">
                                 <button style="background-color: transparent; padding: 0;">
-                                    <font-awesome-icon icon="trash" />
+                                    <i class="bi bi-trash"></i>
                                 </button>
                             </td>
                         </tr>
                     </tbody>
                 </table>
-
             </div>
         </div>
         <nav class="d-flex justify-content-center my-3" aria-label="Movie pagination">
@@ -152,7 +151,7 @@
 <script>
 import { APIService } from "@/http/APIService";
 import { API_URL } from "../http/APIService";
-
+import { useAuthStore } from "@/store/AuthStore";
 const apiService = new APIService();
 import router from "../router";
 
@@ -167,7 +166,6 @@ export default {
             movieSize: 0,
             showMsg: '',
             isMobile: false,
-            authenticated: false,
             headers: [
                 { text: 'Name', sortable: false, align: 'left' },
                 { text: 'Description', sortable: false, align: 'left', },
@@ -181,7 +179,6 @@ export default {
         };
     },
     mounted() {
-        this.authenticated = localStorage.getItem("isAuthenticated")
         this.getMovies();
     },
     computed: {
@@ -192,6 +189,12 @@ export default {
             const start = (this.currentPage - 1) * this.pageSize;
             return this.movies.slice(start, start + this.pageSize);
         },
+        authenticated() {
+            return this.authStore.isAuthenticated;
+        },
+        authStore() {
+            return useAuthStore();
+        }
     },
     methods: {
         onResize() {
@@ -205,37 +208,40 @@ export default {
                 this.showMsg = this.$route.params.msg;
             }
         },
+        // get the movies from the backend
         getMovies() {
-            apiService
-                .getMovieList()
-                .then((response) => {
-                    this.movies = response.data.data || [];
-                    this.movieSize = this.movies.length;
-                    if (
-                        localStorage.getItem("isAuthenticated") &&
-                        JSON.parse(localStorage.getItem("isAuthenticated")) === true
-                    ) {
-                        this.validUserName = JSON.parse(localStorage.getItem("log_user"));
-                    }
-                })
+            apiService.getMovieList().then((response) => {
+                this.movies = response.data.data || [];
+                this.movieSize = this.movies.length;
+            })
                 .catch((error) => {
-                    localStorage.removeItem("isAuthenticated");
-                    localStorage.setItem("isAuthenticated", false)
-                    localStorage.removeItem("log_user");
-                    localStorage.removeItem("access");
-                    router.push("/auth");
+                    if (error.response && error.response.status === 401) {
+                        this.auth.clearAuth();
+                        router.push("/auth");
+                    } else {
+                        console.error("getMovies failed:", error);
+                    }
                 });
         },
+        // handle the add new movie button click
         addNewMovie() {
-            if (localStorage.getItem("isAuthenticated")
-                && JSON.parse(localStorage.getItem("isAuthenticated")) === true) {
-                router.push('/movie-create');
+            if (this.authenticated) {
+                router.push("/movie-create");
             } else {
                 router.push("/auth");
             }
         },
+        // handle the update movie button click
         updateMovie(movie) {
-            router.push("/movie-create/" + movie.pk);
+            if (this.authenticated) {
+                if (movie.pk) {
+                    router.push("/movie-create/" + movie.pk);
+                } else {
+                    router.push("/movie-create");
+                }
+            } else {
+                router.push("/auth")
+            }
         },
         deleteMovie(movie) {
             if (confirm("Do you really want to delete?")) {
@@ -246,6 +252,7 @@ export default {
                     }
                 }).catch(error => {
                     if (error.response.status === 401) { // "not authorized"
+                        this.auth.clearAuth();
                         router.push("/auth");
                     } else if (error.response.status === 400) { //"bad request"
                         this.showMsg = "error";

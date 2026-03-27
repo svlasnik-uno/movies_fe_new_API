@@ -1,22 +1,24 @@
 <template>
     <div class="container-fluid">
         <div class="row align-items-center justify-content-center">
-      <div class=" col align-items-center">
-          <div class="col col-12 col-sm-10 col-md-10 col-lg-6">
-            <div class="alert alert-danger shadow" role="alert" v-if="showMsg === 'movieNotFoundError'">
-              Please verify Movie Information
+            <div class=" col align-items-center">
+                <div class="col col-12 col-sm-10 col-md-10 col-lg-6">
+                    <div class="alert alert-danger shadow" role="alert" v-if="showMsg === 'movieNotFoundError'">
+                        Please verify Movie Information
+                    </div>
+                    <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'requestError'">
+                        Please verify Movie Information - data formatted incorrectly
+                    </div>
+                    <div class="alert alert-danger shadow" role="alert"
+                        v-else-if="showMsg === 'constribsNotFoundError'">
+                        No results found for that movie title - please try again with a different title or check
+                        spelling
+                    </div>
+                    <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'noImageError'">
+                        No image found for movie
+                    </div>
+                </div>
             </div>
-            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'requestError'">
-              Please verify Movie Information - data formatted incorrectly
-            </div>
-            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'constribsNotFoundError'">
-              No results found for that movie title - please try again with a different title or check spelling
-            </div>
-            <div class="alert alert-danger shadow" role="alert" v-else-if="showMsg === 'noImageError'">
-              No image found for movie
-            </div>
-          </div>
-        </div>
             <div class="card">
                 <div class="card-header"><b>{{ pageTitle }}</B></div>
                 <div class="card-body">
@@ -67,21 +69,21 @@
                     </form>
                     <div v-if="movie.contributors && movie.contributors.length > 0" class="mt-4">
                         <h5 class="text-center mb-3">Contributors</h5>
-                    <table class="table table-hover" style="overflow-y: auto">
-                    <thead>
-                        <tr>
-                            <th scope="col">Name</th>
-                            <th scope="col">Role</th>
+                        <table class="table table-hover" style="overflow-y: auto">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Role</th>
 
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="contrib in movie.contributors" >
-                            <td>{{ contrib.firstname }} {{ contrib.lastname }}</td>
-                            <td>{{ contrib.role }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="contrib in movie.contributors">
+                                    <td>{{ contrib.firstname }} {{ contrib.lastname }}</td>
+                                    <td>{{ contrib.role }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                     <div v-else class="text-center mt-3">
                         No contributors found for this movie.
@@ -102,6 +104,7 @@ import router from '../router';
 import { APIService } from '../http/APIService';
 const apiService = new APIService();
 import { API_URL } from "../http/APIService";
+import { useAuthStore } from "@/store/AuthStore";
 export default {
     name: "MovieDetail",
     data() {
@@ -119,21 +122,16 @@ export default {
             pageTitle: "Movie Details",
             movieImagePreview: null,
             URL: API_URL,
-            authenticated: false,
         };
     },
-  beforeCreate() {
-    if (localStorage.getItem("isAuthenticated") &&
-      JSON.parse(localStorage.getItem("isAuthenticated")) === true) {
-      this.authenticated = true
-    }
-    else {
-      this.authenticated = false
-    }
-    if (this.authenticated === false) {
-      router.push("/auth");
-    }
-  },
+    computed: {
+        authenticated() {
+            return this.authStore.isAuthenticated;
+        },
+        authStore() {
+            return useAuthStore();
+        }
+    },
     methods: {
         backOperation() {
             this.$router.back();
@@ -162,8 +160,7 @@ export default {
         },
     },
     mounted() {
-        this.authenticated = localStorage.getItem("isAuthenticated")
-        if (!this.authenticated || this.authenticated === "false") {
+        if (!this.authenticated) {
             router.push("/auth");
         }
         else if (this.$route.params.pk) {
@@ -174,17 +171,18 @@ export default {
                 this.setPreviewFromMovieImage(); // display existing image thumbnail
                 this.movie.contributors = response.data.contributors || [];
             }).catch(error => {
-                if (error.response.status === 404){ 
+                if (error.response.status === 404) {
                     this.showMsg = "movieNotFoundError";
                 }
                 else if (error.response.status === 401) { // "not authorized"
+                    this.authStore.clearAuth();
                     router.push("/auth");
                 } else {
                     this.showMsg = "error";
+                    this.authStore.clearAuth();
                     router.push("/auth");
                 }
             });
-
         }
     }
 }

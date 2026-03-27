@@ -1,14 +1,13 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-import axios from 'axios'
 import "bootstrap/dist/css/bootstrap.min.css"
+import 'bootstrap-icons/font/bootstrap-icons.css'
 import "bootstrap"
-// import the fontawesome icons
-import { library } from "@fortawesome/fontawesome-svg-core";
-import { fas, faTrash, faPencil, faPlus, faBars} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
- 
-library.add(fas, faTrash, faPencil, faPlus, faBars);
+import { createPinia, getActivePinia } from 'pinia'
+import piniaPlugPersistedstate from 'pinia-plugin-persistedstate'
 
-createApp(App).use(router).component("font-awesome-icon", FontAwesomeIcon).mount('#app')
+const pinia = createPinia(); 
+pinia.use(piniaPlugPersistedstate)
+
+createApp(App).use(pinia).use(router).mount('#app')

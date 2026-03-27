@@ -119,11 +119,11 @@
                               <td>
                                 <button type="button" class="btn btn-sm btn-outline-primary me-1"
                                   @click="startContributorEdit(idx)" title="Edit">
-                                  <font-awesome-icon icon="fa-solid fa-pencil" />
+                                  <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-danger"
                                   @click="deleteContributor(idx)" title="Delete">
-                                  <font-awesome-icon icon="fa-solid fa-trash-can" />
+                                  <i class="bi bi-trash"></i>
                                 </button>
                               </td>
                             </tr>
@@ -170,22 +170,10 @@
 import router from '../router';
 import { APIService } from '../http/APIService';
 import { API_URL } from "../http/APIService";
+import { useAuthStore } from "../store/AuthStore";
 const apiService = new APIService();
 
 export default {
-  //prevent user from accessing this page if not authorized
-  beforeCreate() {
-    if (localStorage.getItem("isAuthenticated") &&
-      JSON.parse(localStorage.getItem("isAuthenticated")) === true) {
-      this.authenticated = true
-    }
-    else {
-      this.authenticated = false
-    }
-    if (this.authenticated === false) {
-      router.push("/auth");
-    }
-  },
   data() {
     return {
       showError: false,
@@ -196,7 +184,6 @@ export default {
       pageTitle: "Add New Movie",
       isUpdate: false,
       showMsg: '',
-      authenticated: false,
       movieImagePreview: null, // for displaying the selected or existing movie image as a thumbnail
       // TMDb API configuration
       IMAGE_URL: "https://image.tmdb.org//t/p/w500",
@@ -204,6 +191,30 @@ export default {
       editingContributorIndex: null,
       MAX_CONTRIBUTORS: 10,
     };
+  },
+  computed: {
+    authenticated() {
+      return this.authStore.isAuthenticated;
+    },
+    authStore() {
+      return useAuthStore();
+    },
+    canUpsertContributor() {
+      const next = {
+        firstname: (this.contributorDraft.firstname || "").trim(),
+        lastname: (this.contributorDraft.lastname || "").trim(),
+        role: (this.contributorDraft.role || "").trim(),
+      };
+
+      const hasAllFields = next.firstname && next.lastname && next.role;
+      const list = this.movie.contributors || [];
+
+      // Allow update even when list is already at max
+      const underLimit =
+        this.editingContributorIndex !== null || list.length < this.MAX_CONTRIBUTORS;
+
+      return Boolean(hasAllFields && underLimit);
+    }
   },
   methods: {
     // Handle file selection from the input and store it for upload
@@ -259,6 +270,24 @@ export default {
     cancelOperation() {
       this.$router.back();
     },
+    // Set the movie image preview based on the current movie image, handling both File objects and URL strings
+    setPreviewFromMovieImage() {
+      const img = this.movie?.movie_image;
+      // If it's a File (upload or TMDB-downloaded file), create a blob URL
+      if (img instanceof File) {
+        this.movieImagePreview = URL.createObjectURL(img);
+      }
+      // If backend returns a string path/url
+      else if (typeof img === "string" && img.length) {
+        // If it's already absolute, use as-is. If it's relative, prefix API_URL.
+        this.movieImagePreview = img.startsWith("http")
+          ? img
+          : `${this.URL}${img}`; // e.g. API_URL + "/media/....jpg"
+      }
+      else {
+        this.movieImagePreview = null;
+      }
+    },
     // Create a new movie, including handling image upload logic
     async createMovie() {
       this.isUpdate = false;
@@ -281,8 +310,10 @@ export default {
         }
       } catch (error) {
 
-        if (error?.response?.status === 401) router.push("/auth");
-        else if (error?.response?.status === 400) {
+        if (error?.response?.status === 401) {
+          router.push("/auth");
+          this.authStore.clearAuth();
+        } else if (error?.response?.status === 400) {
           const nonField = error.response.data.non_field_errors?.[0];
           if (nonField?.includes("must make a unique set")) {
             this.showMsg = "uniqueError";
@@ -297,7 +328,7 @@ export default {
         const formData = new FormData();
         await this.buildFormData(formData);
 
-        const response = await apiService.updateMovie(formData);
+        const response = await apiService.updateMovie(this.movie.pk, formData);
         if (response.status === 200) {
           this.movie = response.data;
           this.$router.push("/movie-list/update");
@@ -305,7 +336,10 @@ export default {
           this.showMsg = "error";
         }
       } catch (error) {
-        if (error?.response?.status === 401) router.push("/auth");
+        if (error?.response?.status === 401) {
+          router.push("/auth");
+          this.authStore.clearAuth();
+        }
         else if (error?.response?.status === 400) {
           const nonField = error.response.data.non_field_errors?.[0];
           if (nonField?.includes("must make a unique set")) {
@@ -449,41 +483,42 @@ export default {
       }
     },
   },
-  computed: {
-    canUpsertContributor() {
-      const next = {
-        firstname: (this.contributorDraft.firstname || "").trim(),
-        lastname: (this.contributorDraft.lastname || "").trim(),
-        role: (this.contributorDraft.role || "").trim(),
-      };
-
-      const hasAllFields = next.firstname && next.lastname && next.role;
-      const list = this.movie.contributors || [];
-
-      // Allow update even when list is already at max
-      const underLimit =
-        this.editingContributorIndex !== null || list.length < this.MAX_CONTRIBUTORS;
-
-      return Boolean(hasAllFields && underLimit);
-    }
-  },
   // On component mount, check if we're editing an existing movie (based on route params) and fetch its details if so  
   mounted() {
+    if (!this.authenticated) {
+      router.push("/auth");
+    }
+
     if (this.$route.params.pk) {
       this.pageTitle = "Edit Movie";
       this.isUpdate = true;
+
       apiService.getMovie(this.$route.params.pk).then(response => {
         this.movie = response.data;
         this.setPreviewFromMovieImage(); // display existing image thumbnail
+        this.movie.contributors = response.data.contributors || [];
       }).catch(error => {
-        if (error.response.status === 401) { // "not authorized"
+        if (error.response && error.response.status === 401) {
+          this.authStore.clearAuth();
           router.push("/auth");
         } else {
-          this.showMsg = "error";
-          router.push("/auth");
+          console.error("getMovie failed:", error);
         }
       });
     }
+          // get the current list of movies to avoid duplicates
+    apiService.getMovieList().then((response) => {
+      this.movies = response.data.data || [];
+      this.movieSize = this.movies.length;
+    })
+      .catch((error) => {
+        if (error.response && error.response.status === 401) {
+          this.auth.clearAuth();
+          router.push("/auth");
+        } else {
+          console.error("getMovies failed:", error);
+        }
+      });
   }
 }
 </script>

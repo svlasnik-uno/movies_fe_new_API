@@ -1,59 +1,66 @@
-import axios from "axios";
-// Change the API_URL to the correct location of the backend API before deploying the app
-export const API_URL =
-  'https://vlasnikuno.pythonanywhere.com'; /*'https://vlasnikuno.pythonanywhere.com'; 'http://localhost:8000' http://127.0.0.1:8000 or  'https://yourPythonAnywhereName.pythonanywhere.com'*/
+
 export const BASE_API_URL = "https://api.themoviedb.org/3";
 export const TMDB_API_KEY = "ba080278e548a56b768590a256a91a47";
 export const LANGUAGE = "en-US";
+import axios from "axios";
+import { useAuthStore } from "@/store/AuthStore";
+
+// Change the API_URL to the correct location of the backend API before deploying the app
+export const API_URL ='http://localhost:8000' ;
+/* 'https://vlasnikuno.pythonanywhere.com' 'http://localhost:8000' http://127.0.0.1:8000/ or 'https://yourPythonAnywhereName.pythonanywhere.com/' */
 
 export class APIService {
-  constructor() {}
-  //
-  getMovie(param_pk) {
-    const url = `${API_URL}/api/movies/${param_pk}`;
-    let jwtToken = localStorage.getItem("access");
-    const headers = { Authorization: `JWT ${jwtToken}` };
-    return axios.get(url, { headers: headers });
-  }
-  //
-  getMovieList() {
-    const url = `${API_URL}/api/movies/`;
-    let jwtToken = localStorage.getItem("access");
-    const headers = { Authorization: `JWT ${jwtToken}` };
-    return axios.get(url, { headers: headers });
-  }
-  //
-  addNewMovie(movie) {
-    const url = `${API_URL}/api/movies/`;
-    let jwtToken = localStorage.getItem("access");
-    const headers = { Authorization: `JWT ${jwtToken}` };
-    return axios.post(url, movie, { headers: headers });
-  }
-  // update a saved movie with new form data (including file upload if needed)
-  updateMovie(formData) {
-    const url = `${API_URL}/api/movies/${formData.get("pk")}`;
-    let jwtToken = localStorage.getItem("access");
-    const headers = { Authorization: `JWT ${jwtToken}` };
-    return axios.put(url, formData, { headers: headers });
-  }
-  // delete a saved movie from the database
-  deleteMovie(movie_Pk) {
-    const url = `${API_URL}/api/movies/${movie_Pk}`;
-    let jwtToken = localStorage.getItem("access");
-    const headers = { Authorization: `JWT ${jwtToken}` };
-    return axios.delete(url, { headers: headers });
+  constructor() { }
+
+  getAuthHeaders() {
+    const authStore = useAuthStore();
+    if (!authStore.access) {
+      return {};
+    }
+    return {
+      Authorization: `JWT ${authStore.access}`,
+    };
   }
 
-  // authenticate user login with backend
-  authenticateLogin(credentials) {
-    const url = `${API_URL}/api/`;
-    return axios.post(url, credentials);
+  getMovieList() {
+    return axios.get(`${API_URL}/api/movies/`, {
+      headers: this.getAuthHeaders(),
+    });
   }
-  // register user with backend
+
+  getMovie(param_pk) {
+    return axios.get(`${API_URL}/api/movies/${param_pk}`, {
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  addNewMovie(movie) {
+    return axios.post(`${API_URL}/api/movies/`, movie, {
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  updateMovie(pk, movie) {
+    return axios.put(`${API_URL}/api/movies/${pk}`, movie, {
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  deleteMovie(movie_Pk) {
+    return axios.delete(`${API_URL}/api/movies/${movie_Pk}`, {
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  authenticateLogin(credentials) {
+    return axios.post(`${API_URL}/api/`, credentials);
+  }
+
   registerUser(credentials) {
-    const url = `${API_URL}/register/`;
-    credentials.customusername = credentials.username;
-    return axios.post(url, credentials);
+    return axios.post(`${API_URL}/register/`, {
+      ...credentials,
+      customusername: credentials.username,
+    });
   }
   // Make GET requests to TMDb API with proper query parameters and error handling
   async movieAPIGet(path, params = {}) {
