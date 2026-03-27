@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "../components/Home.vue";
 import MovieList from "../components/MovieList.vue";
-import MovieCreate from "../components/MovieCreate.vue";
+import MovieForm from "../components/MovieForm.vue";
 import MovieDetail from "../components/MovieDetail.vue"
 import Auth from "../components/Auth.vue";
 import Register from "../components/Register.vue";
@@ -24,13 +24,13 @@ const routes = [
   },
   {
     path: "/movie-create",
-    name: "MovieCreate",
-    component: MovieCreate,
+    name: "MovieForm",
+    component: MovieForm,
   },
   {
     path: "/movie-create/:pk",
     name: "MovieUpdate",
-    component: MovieCreate,
+    component: MovieForm,
   },
     {
     path: '/moviedetail/:pk',
